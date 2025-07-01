@@ -21,7 +21,11 @@
             
             vendorHash = "sha256-ZRMpiDSJXzbHWNjMIHkxn0dJjzneudR/SsLl26oETtM=";
             
-            # Skip vendor check due to embedded files in dependencies
+            # Use proxyVendor due to embedded test files in sipgo dependency
+            # The sipgo library has //go:embed directives for test certificates
+            # that aren't included in standard vendoring. This is a known issue
+            # with Go modules that use embed for test data.
+            # See: https://github.com/NixOS/nixpkgs/issues/86349
             proxyVendor = true;
             
             meta = with pkgs.lib; {

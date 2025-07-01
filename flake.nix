@@ -19,10 +19,7 @@
             
             src = ./.;
             
-            vendorHash = "sha256-OjiZKAOr2joYmaSmqIgeQtng8i0/Mbx6Q1gvpCs+hfg=";
-            
-            # Use proxyVendor due to embedded test files in sipgo dependency
-            proxyVendor = true;
+            vendorHash = "sha256-WRONGHASH1234567890WRONGHASH1234567890ABC=";
             
             meta = with pkgs.lib; {
               description = "SIP call bridging tool for VOIP.MS";

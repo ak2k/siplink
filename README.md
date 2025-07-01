@@ -71,7 +71,6 @@ Using [rbw](https://github.com/doy/rbw), a fast Bitwarden CLI:
    - Custom fields:
      - `voipms_user`: Your VOIP.MS username
      - `voipms_pass`: Your VOIP.MS password
-     - `voipms_server`: Your preferred server (e.g., `chicago.voip.ms`)
 
 2. **Install and configure rbw:**
    ```bash
@@ -89,7 +88,7 @@ Using [rbw](https://github.com/doy/rbw), a fast Bitwarden CLI:
    # Set credentials from Bitwarden
    export VOIPMS_USER=$(rbw get "voipms" --field voipms_user)
    export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass)
-   export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server)
+   export VOIPMS_SERVER="chicago.voip.ms"  # or your preferred server
 
    # Run siplink
    siplink 15551234567 15559876543
@@ -109,7 +108,7 @@ alias callt="nix run github:ak2k/siplink -- 15551234567"
 # With rbw (Bitwarden) - fetches credentials on each run
 alias callb='export VOIPMS_USER=$(rbw get "voipms" --field voipms_user) && \
              export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass) && \
-             export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server) && \
+             export VOIPMS_SERVER="chicago.voip.ms" && \
              nix run github:ak2k/siplink --'
 ```
 

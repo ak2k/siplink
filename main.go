@@ -144,14 +144,17 @@ func main() {
 		log.Fatalf("Failed to register: %v", err)
 	}
 
-	// Create Dialog Client for calls
+	// Create Dialog UA for calls
 	contactHdr := sip.ContactHeader{
 		Address: sip.Uri{User: username, Host: localIP, Port: 5060},
 	}
-	dialogClient := sipgo.NewDialogClient(client, contactHdr)
+	dialogUA := sipgo.DialogUA{
+		Client:     client,
+		ContactHDR: contactHdr,
+	}
 
 	// Make call
-	dialog, err := makeCall(ctx, dialogClient, phone1, server, username, password)
+	dialog, err := makeCall(ctx, &dialogUA, phone1, server, username, password)
 	if err != nil {
 		log.Fatalf("Failed to make call: %v", err)
 	}
@@ -266,7 +269,7 @@ func authenticateAndRegister(ctx context.Context, client *sipgo.Client, original
 	return nil
 }
 
-func makeCall(ctx context.Context, dialogClient *sipgo.DialogClient, phoneNumber, server, username, password string) (*sipgo.DialogClientSession, error) {
+func makeCall(ctx context.Context, dialogUA *sipgo.DialogUA, phoneNumber, server, username, password string) (*sipgo.DialogClientSession, error) {
 	log.Printf("📞 Calling %s...", phoneNumber)
 
 	recipient := sip.Uri{User: phoneNumber, Host: server}
@@ -286,7 +289,7 @@ a=sendrecv
 
 	contentTypeHeader := sip.NewHeader("Content-Type", "application/sdp")
 
-	dialog, err := dialogClient.Invite(ctx, recipient, []byte(sdp), contentTypeHeader)
+	dialog, err := dialogUA.Invite(ctx, recipient, []byte(sdp), contentTypeHeader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send INVITE: %w", err)
 	}

@@ -43,7 +43,7 @@ jobs:
         set -euo pipefail
         
         # First, set vendorHash to empty string to force error with correct hash
-        sed -i 's/vendorHash = ".*"/vendorHash = ""/' flake.nix
+        sed -i 's|vendorHash = ".*"|vendorHash = ""|' flake.nix
         
         # Try to build, which will fail but give us the correct hash
         echo "Getting correct vendor hash..."
@@ -59,7 +59,7 @@ jobs:
           echo "Found correct hash: $CORRECT_HASH"
           
           # Update flake.nix with the correct hash
-          sed -i "s/vendorHash = \"\"/vendorHash = \"$CORRECT_HASH\"/" flake.nix
+          sed -i "s|vendorHash = \"\"|vendorHash = \"$CORRECT_HASH\"|" flake.nix
           
           # Verify the build now works
           echo "Verifying build with new hash..."

@@ -21,6 +21,9 @@
             
             vendorHash = "sha256-OjiZKAOr2joYmaSmqIgeQtng8i0/Mbx6Q1gvpCs+hfg=";
             
+            # Use proxyVendor due to embedded test files in sipgo dependency
+            proxyVendor = true;
+            
             meta = with pkgs.lib; {
               description = "SIP call bridging tool for VOIP.MS";
               homepage = "https://github.com/ak2k/siplink";

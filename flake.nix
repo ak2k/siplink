@@ -19,14 +19,7 @@
             
             src = ./.;
             
-            vendorHash = "";
-            
-            # Use proxyVendor due to embedded test files in sipgo dependency
-            # The sipgo library has //go:embed directives for test certificates
-            # that aren't included in standard vendoring. This is a known issue
-            # with Go modules that use embed for test data.
-            # See: https://github.com/NixOS/nixpkgs/issues/86349
-            proxyVendor = true;
+            vendorHash = "sha256-OjiZKAOr2joYmaSmqIgeQtng8i0/Mbx6Q1gvpCs+hfg=";
             
             meta = with pkgs.lib; {
               description = "SIP call bridging tool for VOIP.MS";

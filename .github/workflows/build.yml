@@ -41,7 +41,7 @@ jobs:
           echo "✅ Vendor hash is valid"
         else
           # Build failed - check why
-          if grep -q "hash mismatch" build.log; then
+          if grep -qE "(hash mismatch|invalid SRI hash)" build.log; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
             echo "❌ Vendor hash needs updating"
             # Extract the correct hash for logging

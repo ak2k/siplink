@@ -21,6 +21,9 @@
             
             vendorHash = "sha256-ZRMpiDSJXzbHWNjMIHkxn0dJjzneudR/SsLl26oETtM=";
             
+            # Skip vendor check due to embedded files in dependencies
+            proxyVendor = true;
+            
             meta = with pkgs.lib; {
               description = "SIP call bridging tool for VOIP.MS";
               homepage = "https://github.com/ak2k/siplink";

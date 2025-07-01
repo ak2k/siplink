@@ -19,7 +19,7 @@
             
             src = ./.;
             
-            vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            vendorHash = "sha256-ZRMpiDSJXzbHWNjMIHkxn0dJjzneudR/SsLl26oETtM=";
             
             meta = with pkgs.lib; {
               description = "SIP call bridging tool for VOIP.MS";

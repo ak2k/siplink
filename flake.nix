@@ -19,7 +19,7 @@
             
             src = ./.;
             
-            vendorHash = "sha256-okQRiXOi7j0fXT/NPTbvrhDozXv4JRikE64xYpDnoxg=";
+            vendorHash = "";
             
             # Use proxyVendor due to embedded test files in sipgo dependency
             # The sipgo library has //go:embed directives for test certificates

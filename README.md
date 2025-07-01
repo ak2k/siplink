@@ -62,18 +62,65 @@ VOIPMS_SERVER=toronto.voip.ms siplink 14161234567 14169876543
 
 ## Integration with Password Managers
 
-### Bitwarden
+### Bitwarden (via rbw)
 
-Store your credentials in Bitwarden and use them with:
+Using [rbw](https://github.com/doy/rbw), a fast unofficial Bitwarden CLI.
+
+Store your VOIP.MS credentials in Bitwarden with custom fields:
+- Item name: `voipms` (or any name you prefer)
+- Custom fields:
+  - `voipms_user`: Your VOIP.MS username
+  - `voipms_pass`: Your VOIP.MS password
+  - `voipms_server`: Your preferred server (e.g., `chicago.voip.ms`)
 
 ```bash
+# Install rbw
+nix-env -iA nixpkgs.rbw  # or add to your nix configuration
+
+# First-time setup
+rbw config set email your.email@example.com
+rbw login
+rbw sync
+
 # Set credentials from Bitwarden
-export VOIPMS_USER=$(bw get item voipms | jq -r '.fields[] | select(.name=="voipms_user") | .value')
-export VOIPMS_PASS=$(bw get item voipms | jq -r '.fields[] | select(.name=="voipms_pass") | .value')
-export VOIPMS_SERVER=$(bw get item voipms | jq -r '.fields[] | select(.name=="voipms_server") | .value')
+export VOIPMS_USER=$(rbw get "voipms" --field voipms_user)
+export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass)
+export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server)
 
 # Run siplink
 siplink 15551234567 15559876543
+```
+
+### Bitwarden (Official CLI)
+
+Using the official Bitwarden CLI:
+
+```bash
+# Set credentials from Bitwarden
+export VOIPMS_USER=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_user") | .value')
+export VOIPMS_PASS=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_pass") | .value')
+export VOIPMS_SERVER=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_server") | .value')
+
+# Run siplink
+siplink 15551234567 15559876543
+```
+
+### Shell Aliases
+
+Add these to your shell configuration for convenience:
+
+```bash
+# Basic call - expects VOIPMS_* env vars
+alias call="nix run github:ak2k/siplink --"
+
+# Quick transfer to your frequent number
+alias callt="nix run github:ak2k/siplink -- 15551234567"
+
+# With rbw (Bitwarden) - fetches credentials on each run
+alias callb='export VOIPMS_USER=$(rbw get "voipms" --field voipms_user) && \
+             export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass) && \
+             export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server) && \
+             nix run github:ak2k/siplink --'
 ```
 
 ## How It Works

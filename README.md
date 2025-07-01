@@ -94,23 +94,6 @@ Using [rbw](https://github.com/doy/rbw), a fast Bitwarden CLI:
    siplink 15551234567 15559876543
    ```
 
-### Shell Aliases
-
-Add these to your shell configuration for convenience:
-
-```bash
-# Basic call - expects VOIPMS_* env vars
-alias call="nix run github:ak2k/siplink --"
-
-# Quick transfer to your frequent number
-alias callt="nix run github:ak2k/siplink -- 15551234567"
-
-# With rbw (Bitwarden) - fetches credentials on each run
-alias callb='export VOIPMS_USER=$(rbw get "voipms" --field voipms_user) && \
-             export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass) && \
-             export VOIPMS_SERVER="chicago.voip.ms" && \
-             nix run github:ak2k/siplink --'
-```
 
 ## How It Works
 

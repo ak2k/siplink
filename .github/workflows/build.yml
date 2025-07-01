@@ -160,3 +160,16 @@ jobs:
           echo "Nix build result: ${{ needs.nix-build.result }}"
           exit 1
         fi
+    
+    - name: Trigger vendor hash update
+      if: needs.check-vendor-hash.outputs.hash-valid == 'false' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'update-vendor-hash.yml',
+            ref: 'main'
+          })

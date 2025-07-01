@@ -43,9 +43,7 @@ export VOIPMS_SERVER='chicago.voip.ms'  # Optional, defaults to chicago
 
 ### Available VOIP.MS Servers
 
-- `chicago.voip.ms`, `newyork.voip.ms`, `seattle.voip.ms`
-- `dallas.voip.ms`, `losangeles.voip.ms`
-- `toronto.voip.ms`, `montreal.voip.ms`
+See [VOIP.MS Recommended POPs](https://wiki.voip.ms/article/Recommended_POPs) for the full list of available servers and their locations.
 
 ## Usage
 
@@ -132,6 +130,7 @@ Pull requests welcome! Please ensure:
 - Code follows Go conventions
 - Tests pass
 - Documentation is updated
+- Both `flake.lock` and `vendorHash` are updated when dependencies change
 
 ## Acknowledgments
 

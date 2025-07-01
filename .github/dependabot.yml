@@ -44,4 +44,4 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
-# Trigger Dependabot scan
+# Trigger Dependabot scan - test workflow

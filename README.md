@@ -62,48 +62,38 @@ VOIPMS_SERVER=toronto.voip.ms siplink 14161234567 14169876543
 
 ## Integration with Password Managers
 
-### Bitwarden (via rbw)
+### Bitwarden
 
-Using [rbw](https://github.com/doy/rbw), a fast unofficial Bitwarden CLI.
+Using [rbw](https://github.com/doy/rbw), a fast Bitwarden CLI:
 
-Store your VOIP.MS credentials in Bitwarden with custom fields:
-- Item name: `voipms` (or any name you prefer)
-- Custom fields:
-  - `voipms_user`: Your VOIP.MS username
-  - `voipms_pass`: Your VOIP.MS password
-  - `voipms_server`: Your preferred server (e.g., `chicago.voip.ms`)
+1. **Store your credentials in Bitwarden:**
+   - Item name: `voipms` (or any name you prefer)
+   - Custom fields:
+     - `voipms_user`: Your VOIP.MS username
+     - `voipms_pass`: Your VOIP.MS password
+     - `voipms_server`: Your preferred server (e.g., `chicago.voip.ms`)
 
-```bash
-# Install rbw
-nix-env -iA nixpkgs.rbw  # or add to your nix configuration
+2. **Install and configure rbw:**
+   ```bash
+   # Install rbw
+   nix-env -iA nixpkgs.rbw  # or add to your nix configuration
 
-# First-time setup
-rbw config set email your.email@example.com
-rbw login
-rbw sync
+   # First-time setup
+   rbw config set email your.email@example.com
+   rbw login
+   rbw sync
+   ```
 
-# Set credentials from Bitwarden
-export VOIPMS_USER=$(rbw get "voipms" --field voipms_user)
-export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass)
-export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server)
+3. **Use with siplink:**
+   ```bash
+   # Set credentials from Bitwarden
+   export VOIPMS_USER=$(rbw get "voipms" --field voipms_user)
+   export VOIPMS_PASS=$(rbw get "voipms" --field voipms_pass)
+   export VOIPMS_SERVER=$(rbw get "voipms" --field voipms_server)
 
-# Run siplink
-siplink 15551234567 15559876543
-```
-
-### Bitwarden (Official CLI)
-
-Using the official Bitwarden CLI:
-
-```bash
-# Set credentials from Bitwarden
-export VOIPMS_USER=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_user") | .value')
-export VOIPMS_PASS=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_pass") | .value')
-export VOIPMS_SERVER=$(bw get item "voipms" | jq -r '.fields[] | select(.name=="voipms_server") | .value')
-
-# Run siplink
-siplink 15551234567 15559876543
-```
+   # Run siplink
+   siplink 15551234567 15559876543
+   ```
 
 ### Shell Aliases
 

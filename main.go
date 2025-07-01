@@ -14,17 +14,27 @@ import (
 	"github.com/icholy/digest"
 )
 
+func showHelp() {
+	fmt.Println("SIPLink - SIP Call Bridging Tool")
+	fmt.Println("================================")
+	fmt.Println("\nUsage: siplink <phone1> <phone2>")
+	fmt.Println("\nExample: siplink 15551234567 15559876543")
+	fmt.Println("\nSet environment variables:")
+	fmt.Println("  export VOIPMS_USER='your_account'")
+	fmt.Println("  export VOIPMS_PASS='your_password'")
+	fmt.Println("  export VOIPMS_SERVER='chicago.voip.ms'")
+	fmt.Println("\nSee https://github.com/ak2k/siplink for more info.")
+}
+
 func main() {
+	// Check for help flag
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h" || os.Args[1] == "help") {
+		showHelp()
+		os.Exit(0)
+	}
+
 	if len(os.Args) != 3 {
-		fmt.Println("SIPLink - SIP Call Bridging Tool")
-		fmt.Println("================================")
-		fmt.Println("\nUsage: siplink <phone1> <phone2>")
-		fmt.Println("\nExample: siplink 15551234567 15559876543")
-		fmt.Println("\nSet environment variables:")
-		fmt.Println("  export VOIPMS_USER='your_account'")
-		fmt.Println("  export VOIPMS_PASS='your_password'")
-		fmt.Println("  export VOIPMS_SERVER='chicago.voip.ms'")
-		fmt.Println("\nSee https://github.com/ak2k/siplink for more info.")
+		showHelp()
 		os.Exit(1)
 	}
 

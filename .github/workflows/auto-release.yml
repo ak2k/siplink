@@ -1,0 +1,150 @@
+name: Auto-release on dependency updates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'flake.lock'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get last release
+      id: last_release
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+        echo "Last release: $LAST_TAG"
+    
+    - name: Check if dependencies changed since last release
+      id: check_changes
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Manual release triggered"
+        else
+          # Check if dependency files changed since last release
+          CHANGED_FILES=$(git diff --name-only ${{ steps.last_release.outputs.last_tag }} HEAD -- go.mod go.sum flake.lock)
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Dependencies changed since last release:"
+            echo "$CHANGED_FILES"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No dependency changes since last release"
+          fi
+        fi
+    
+    - name: Determine version bump
+      id: version
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        LAST_TAG="${{ steps.last_release.outputs.last_tag }}"
+        LAST_VERSION=${LAST_TAG#v}
+        
+        # Parse version components
+        IFS='.' read -ra VERSION_PARTS <<< "$LAST_VERSION"
+        MAJOR=${VERSION_PARTS[0]:-0}
+        MINOR=${VERSION_PARTS[1]:-0}
+        PATCH=${VERSION_PARTS[2]:-0}
+        
+        # Determine bump type
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          BUMP_TYPE="${{ github.event.inputs.release_type }}"
+        else
+          # For automatic releases, use patch by default
+          BUMP_TYPE="patch"
+        fi
+        
+        # Calculate new version
+        case $BUMP_TYPE in
+          major)
+            NEW_VERSION="$((MAJOR + 1)).0.0"
+            ;;
+          minor)
+            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+            ;;
+          patch)
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            ;;
+        esac
+        
+        echo "new_version=v$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: v$NEW_VERSION"
+    
+    - name: Generate changelog
+      id: changelog
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        # Get commit messages since last release
+        LAST_TAG="${{ steps.last_release.outputs.last_tag }}"
+        
+        # Generate changelog
+        {
+          echo "## What's Changed"
+          echo ""
+          
+          # Dependency updates
+          DEPS=$(git log --pretty=format:"%s" ${LAST_TAG}..HEAD | grep -E "^(chore|build)\(deps\):" || true)
+          if [ -n "$DEPS" ]; then
+            echo "### Dependencies"
+            echo "$DEPS" | while read -r line; do
+              echo "- $line"
+            done
+            echo ""
+          fi
+          
+          # Other changes
+          OTHER=$(git log --pretty=format:"%s" ${LAST_TAG}..HEAD | grep -vE "^(chore|build)\(deps\):" || true)
+          if [ -n "$OTHER" ]; then
+            echo "### Other Changes"
+            echo "$OTHER" | while read -r line; do
+              echo "- $line"
+            done
+            echo ""
+          fi
+          
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...${{ steps.version.outputs.new_version }}"
+        } > changelog.md
+        
+        # Save for release body
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat changelog.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create and push tag
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git tag -a ${{ steps.version.outputs.new_version }} -m "Release ${{ steps.version.outputs.new_version }}"
+        git push origin ${{ steps.version.outputs.new_version }}
+    
+    - name: Trigger release workflow
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        echo "Tag pushed: ${{ steps.version.outputs.new_version }}"
+        echo "The release workflow will be triggered automatically by the new tag."

@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.21', '1.22', '1.23']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go }}
+        cache: true
+    
+    - name: Get dependencies
+      run: go mod download
+    
+    - name: Verify module
+      run: go mod verify
+    
+    - name: Build
+      run: go build -v -o siplink-${{ matrix.os }}-go${{ matrix.go }} main.go
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Run staticcheck
+      uses: dominikh/staticcheck-action@v1
+      with:
+        version: "latest"
+        install-go: false
+        cache-key: ${{ matrix.go }}
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: siplink-${{ matrix.os }}-go${{ matrix.go }}
+        path: siplink-${{ matrix.os }}-go${{ matrix.go }}
+        retention-days: 7
+
+  nix-build:
+    name: Nix Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - name: Check Nix flake
+      run: nix flake check
+    
+    - name: Build with Nix
+      run: nix build
+    
+    - name: Test Nix build output
+      run: ./result/bin/siplink --help

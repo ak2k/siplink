@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      tag_name: ${{ steps.get_tag.outputs.tag }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get tag name
+      id: get_tag
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        # Generate changelog
+        if [ -z "$PREV_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+        fi
+        
+        # Save to file for multiline output
+        echo "$CHANGELOG" > changelog.txt
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat changelog.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_tag.outputs.tag }}
+        release_name: Release ${{ steps.get_tag.outputs.tag }}
+        body: |
+          ## What's Changed
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ## Installation
+          
+          ### Using Nix
+          ```bash
+          nix run github:ak2k/siplink -- <source> <destination>
+          ```
+          
+          ### Binary Downloads
+          Download the appropriate binary for your platform below.
+        draft: false
+        prerelease: false
+
+  build-release:
+    name: Build Release Binaries
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary_name: siplink-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            binary_name: siplink-linux-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            binary_name: siplink-darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            binary_name: siplink-darwin-arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache: true
+    
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        go build -v -ldflags="-s -w -X main.version=${{ needs.create-release.outputs.tag_name }}" -o ${{ matrix.binary_name }} main.go
+    
+    - name: Compress binary
+      run: |
+        tar -czf ${{ matrix.binary_name }}.tar.gz ${{ matrix.binary_name }}
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.binary_name }}.tar.gz
+        asset_name: ${{ matrix.binary_name }}.tar.gz
+        asset_content_type: application/gzip
+
+  build-nix:
+    name: Build Nix Artifacts
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - name: Verify vendor hash is correct
+      run: |
+        # First check if current vendorHash works
+        if ! nix build 2>&1 | tee build.log; then
+          echo "Error: vendorHash is incorrect. Please update it before releasing."
+          echo "Run the update-vendor-hash workflow or update manually."
+          exit 1
+        fi
+        echo "vendorHash is correct, proceeding with build"
+    
+    - name: Build with Nix
+      run: nix build
+    
+    - name: Create Nix bundle
+      run: |
+        # Copy the result to a named file
+        cp -L result/bin/siplink siplink-nix
+        tar -czf siplink-nix.tar.gz siplink-nix
+    
+    - name: Upload Nix artifact
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./siplink-nix.tar.gz
+        asset_name: siplink-nix.tar.gz
+        asset_content_type: application/gzip

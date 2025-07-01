@@ -27,28 +27,34 @@ jobs:
     
     - name: Check if vendor hash is valid
       id: check
+      shell: bash
       run: |
-        echo "Checking if vendor hash is valid..."
-        # Try to build just the vendor derivation
-        set +e  # Don't exit on error
-        nix build .#default.goModules --no-link 2>&1 | tee build.log
-        BUILD_STATUS=$?
-        set -e
+        set -euo pipefail
         
-        # Check if build failed due to hash mismatch
-        if [ $BUILD_STATUS -ne 0 ] && grep -q "hash mismatch" build.log; then
-          echo "valid=false" >> $GITHUB_OUTPUT
-          echo "❌ Vendor hash needs updating"
-          # Extract the correct hash for logging
-          CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' || echo "unknown")
-          echo "Expected hash: $CORRECT_HASH"
-        elif [ $BUILD_STATUS -eq 0 ]; then
-          echo "valid=true" >> $GITHUB_OUTPUT
+        echo "Checking if vendor hash is valid..."
+        
+        # Try to build just the vendor derivation
+        # We expect this might fail, so we capture the exit code
+        if nix build .#default.goModules --no-link 2>&1 | tee build.log; then
+          # Build succeeded
+          echo "valid=true" >> "$GITHUB_OUTPUT"
           echo "✅ Vendor hash is valid"
         else
-          echo "valid=false" >> $GITHUB_OUTPUT
-          echo "❌ Build failed for other reasons"
-          exit 1
+          # Build failed - check why
+          if grep -q "hash mismatch" build.log; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "❌ Vendor hash needs updating"
+            # Extract the correct hash for logging
+            CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' || echo "unknown")
+            echo "Expected hash: $CORRECT_HASH"
+          else
+            # Build failed for other reasons
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "❌ Build failed for reasons other than hash mismatch"
+            echo "Build log:"
+            tail -20 build.log
+            exit 1
+          fi
         fi
 
   build:
@@ -137,15 +143,20 @@ jobs:
     
     steps:
     - name: Report status
+      shell: bash
       run: |
-        if [ "${{ needs.check-vendor-hash.outputs.hash-valid }}" == "false" ]; then
+        set -euo pipefail
+        
+        if [[ "${{ needs.check-vendor-hash.outputs.hash-valid }}" == "false" ]]; then
           echo "⏸️ Build skipped - waiting for vendor hash update"
           echo "The update-vendor-hash workflow should handle this automatically."
           exit 0
-        elif [ "${{ needs.build.result }}" == "success" ] && [ "${{ needs.nix-build.result }}" == "success" ]; then
+        elif [[ "${{ needs.build.result }}" == "success" ]] && [[ "${{ needs.nix-build.result }}" == "success" ]]; then
           echo "✅ All builds passed!"
           exit 0
         else
           echo "❌ Build failed"
+          echo "Build result: ${{ needs.build.result }}"
+          echo "Nix build result: ${{ needs.nix-build.result }}"
           exit 1
         fi

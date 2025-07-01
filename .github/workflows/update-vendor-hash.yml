@@ -38,7 +38,10 @@ jobs:
     
     - name: Update vendor hash
       id: update-hash
+      shell: bash
       run: |
+        set -euo pipefail
+        
         # First, set vendorHash to empty string to force error with correct hash
         sed -i 's/vendorHash = ".*"/vendorHash = ""/' flake.nix
         

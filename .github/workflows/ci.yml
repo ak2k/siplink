@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-and-build:
+    name: Update Hash and Build
+    runs-on: ubuntu-latest
+    outputs:
+      hash-updated: ${{ steps.update-hash.outputs.updated }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.head_ref || github.ref }}
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - name: Update vendor hash if needed
+      id: update-hash
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        echo "Checking vendor hash..."
+        
+        # First check if current hash is valid
+        if nix build .#default.goModules --no-link 2>&1 | tee build.log; then
+          echo "✅ Vendor hash is already valid"
+          echo "updated=false" >> "$GITHUB_OUTPUT"
+        else
+          # Check if it's a hash mismatch
+          if grep -qE "(hash mismatch|invalid SRI hash)" build.log; then
+            echo "❌ Vendor hash needs updating"
+            
+            # Set to empty to get correct hash
+            sed -i 's|vendorHash = ".*"|vendorHash = ""|' flake.nix
+            
+            # Get the correct hash
+            if ! nix build 2>&1 | tee build.log; then
+              CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' | sed 's/^[[:space:]]*//')
+              
+              if [ -z "$CORRECT_HASH" ]; then
+                echo "Failed to extract vendor hash"
+                exit 1
+              fi
+              
+              echo "Found correct hash: $CORRECT_HASH"
+              
+              # Update flake.nix with the correct hash
+              sed -i "s|vendorHash = \"\"|vendorHash = \"$CORRECT_HASH\"|" flake.nix
+              
+              # Verify the build now works
+              echo "Verifying build with new hash..."
+              nix build
+              
+              echo "updated=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Build failed for other reasons"
+            tail -20 build.log
+            exit 1
+          fi
+        fi
+    
+    - name: Commit hash update
+      if: steps.update-hash.outputs.updated == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add flake.nix
+        git commit -m "fix: Update vendorHash for Nix build"
+        git push
+    
+    - name: Update PR with hash change
+      if: steps.update-hash.outputs.updated == 'true' && github.event_name == 'pull_request'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add flake.nix
+        git commit -m "fix: Update vendorHash for Nix build"
+        git push
+
+  go-build:
+    name: Go Build
+    needs: update-and-build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.21', '1.22', '1.23']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref || github.ref }}
+    
+    - name: Pull latest changes
+      if: needs.update-and-build.outputs.hash-updated == 'true'
+      run: git pull
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go }}
+        cache: true
+    
+    - name: Get dependencies
+      run: go mod download
+    
+    - name: Verify module
+      run: go mod verify
+    
+    - name: Build
+      run: go build -v -o siplink-${{ matrix.os }}-go${{ matrix.go }} main.go
+    
+    - name: Test binary
+      run: ./siplink-${{ matrix.os }}-go${{ matrix.go }} --help
+    
+    - name: Run go vet
+      run: go vet ./...
+    
+    - name: Run staticcheck
+      uses: dominikh/staticcheck-action@v1
+      with:
+        version: "latest"
+        install-go: false
+        cache-key: ${{ matrix.go }}
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: siplink-${{ matrix.os }}-go${{ matrix.go }}
+        path: siplink-${{ matrix.os }}-go${{ matrix.go }}
+        retention-days: 7
+
+  nix-build:
+    name: Nix Build
+    needs: update-and-build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref || github.ref }}
+    
+    - name: Pull latest changes
+      if: needs.update-and-build.outputs.hash-updated == 'true'
+      run: git pull
+    
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
+    - name: Check Nix flake
+      run: nix flake check
+    
+    - name: Build with Nix
+      run: nix build
+    
+    - name: Test Nix build output
+      run: ./result/bin/siplink --help
+
+  status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [go-build, nix-build]
+    if: always()
+    
+    steps:
+    - name: Report status
+      run: |
+        if [[ "${{ needs.go-build.result }}" == "success" ]] && [[ "${{ needs.nix-build.result }}" == "success" ]]; then
+          echo "✅ All builds passed!"
+          exit 0
+        else
+          echo "❌ Build failed"
+          echo "Go build result: ${{ needs.go-build.result }}"
+          echo "Nix build result: ${{ needs.nix-build.result }}"
+          exit 1
+        fi

@@ -30,15 +30,25 @@ jobs:
       run: |
         echo "Checking if vendor hash is valid..."
         # Try to build just the vendor derivation
-        if nix build .#default.goModules --no-link 2>&1 | tee build.log | grep -q "hash mismatch"; then
+        set +e  # Don't exit on error
+        nix build .#default.goModules --no-link 2>&1 | tee build.log
+        BUILD_STATUS=$?
+        set -e
+        
+        # Check if build failed due to hash mismatch
+        if [ $BUILD_STATUS -ne 0 ] && grep -q "hash mismatch" build.log; then
           echo "valid=false" >> $GITHUB_OUTPUT
           echo "❌ Vendor hash needs updating"
           # Extract the correct hash for logging
           CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' || echo "unknown")
           echo "Expected hash: $CORRECT_HASH"
-        else
+        elif [ $BUILD_STATUS -eq 0 ]; then
           echo "valid=true" >> $GITHUB_OUTPUT
           echo "✅ Vendor hash is valid"
+        else
+          echo "valid=false" >> $GITHUB_OUTPUT
+          echo "❌ Build failed for other reasons"
+          exit 1
         fi
 
   build:

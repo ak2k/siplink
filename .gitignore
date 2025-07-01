@@ -1,0 +1,38 @@
+# Binaries
+siplink
+/result
+
+# Environment files
+.envrc.local
+.env.local
+*.env
+
+# Go build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Nix build results
+result
+result-*

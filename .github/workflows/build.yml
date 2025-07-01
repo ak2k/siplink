@@ -35,6 +35,9 @@ jobs:
     - name: Build
       run: go build -v -o siplink-${{ matrix.os }}-go${{ matrix.go }} main.go
     
+    - name: Test binary
+      run: ./siplink-${{ matrix.os }}-go${{ matrix.go }} --help
+    
     - name: Run go vet
       run: go vet ./...
     

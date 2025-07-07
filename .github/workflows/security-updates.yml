@@ -45,19 +45,52 @@ jobs:
         nix flake update
     
     - name: Update vendor hash if needed
+      shell: bash
       run: |
-        # Set vendorHash to empty string to force error with correct hash
-        sed -i 's/vendorHash = ".*"/vendorHash = ""/' flake.nix
+        set -euo pipefail
         
-        # Try to build, which will fail but give us the correct hash
-        if ! nix build 2>&1 | tee build.log; then
-          # Extract the correct hash from the error message
-          CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//;s/^[[:space:]]*//')
-          
-          if [ -n "$CORRECT_HASH" ]; then
-            # Update flake.nix with the correct hash
-            sed -i "s/vendorHash = \"\"/vendorHash = \"$CORRECT_HASH\"/" flake.nix
-            echo "Updated vendorHash to: $CORRECT_HASH"
+        echo "Checking vendor hash..."
+        
+        # First check if current hash is valid
+        if nix build .#default.goModules --no-link 2>&1 | tee build.log; then
+          echo "✅ Vendor hash is already valid"
+        else
+          # Check if it's a hash mismatch
+          if grep -qE "(hash mismatch|invalid SRI hash)" build.log; then
+            echo "❌ Vendor hash needs updating"
+            
+            # Set to empty to get correct hash
+            sed -i 's|vendorHash = ".*"|vendorHash = ""|' flake.nix
+            
+            # Get the correct hash
+            if ! nix build 2>&1 | tee build.log; then
+              CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' | sed 's/^[[:space:]]*//')
+              
+              if [ -z "$CORRECT_HASH" ]; then
+                echo "Failed to extract vendor hash from build output"
+                echo "Build log tail:"
+                tail -20 build.log
+                exit 1
+              fi
+              
+              echo "Found correct hash: $CORRECT_HASH"
+              
+              # Update flake.nix with the correct hash
+              sed -i "s|vendorHash = \"\"|vendorHash = \"$CORRECT_HASH\"|" flake.nix
+              
+              # Verify the build now works
+              echo "Verifying build with new hash..."
+              if ! nix build; then
+                echo "Build still fails after hash update"
+                exit 1
+              fi
+              
+              echo "✅ Successfully updated vendorHash"
+            fi
+          else
+            echo "Build failed for reasons other than hash mismatch"
+            tail -20 build.log
+            exit 1
           fi
         fi
     

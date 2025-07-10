@@ -154,11 +154,19 @@ jobs:
         git tag -a ${{ steps.version.outputs.new_version }} -m "Release ${{ steps.version.outputs.new_version }}"
         git push origin HEAD:main ${{ steps.version.outputs.new_version }}
     
-    - name: Trigger release workflow
+    - name: Wait for tag to propagate
       if: steps.check_changes.outputs.changed == 'true'
       run: |
         echo "Tag pushed: ${{ steps.version.outputs.new_version }}"
-        echo "Triggering release workflow..."
-        gh workflow run release.yml -f tag=${{ steps.version.outputs.new_version }}
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        echo "Waiting for tag to be available..."
+        sleep 5
+        
+    - name: Create Release
+      if: steps.check_changes.outputs.changed == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.new_version }}
+        name: Release ${{ steps.version.outputs.new_version }}
+        body: ${{ steps.changelog.outputs.changelog }}
+        draft: false
+        prerelease: false

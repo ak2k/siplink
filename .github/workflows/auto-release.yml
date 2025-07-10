@@ -135,6 +135,14 @@ jobs:
         cat changelog.md >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
     
+    - name: Install Nix
+      if: steps.check_changes.outputs.changed == 'true'
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-unstable
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    
     - name: Update version in flake.nix
       if: steps.check_changes.outputs.changed == 'true'
       run: |

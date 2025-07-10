@@ -36,3 +36,7 @@ Thumbs.db
 # Nix build results
 result
 result-*
+
+# Security scanner artifacts
+nancy.apk
+build.log

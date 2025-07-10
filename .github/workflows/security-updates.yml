@@ -104,10 +104,18 @@ jobs:
       uses: sonatype-nexus-community/nancy-github-action@main
       continue-on-error: true
     
+    - name: Stage all changes
+      run: |
+        echo "Files modified before staging:"
+        git status --porcelain
+        git add -A
+        echo "Files staged:"
+        git diff --cached --name-only
+    
     - name: Check if changes exist
       id: changes
       run: |
-        git diff --exit-code || echo "changes=true" >> $GITHUB_OUTPUT
+        git diff --cached --exit-code || echo "changes=true" >> $GITHUB_OUTPUT
     
     - name: Create Pull Request
       if: steps.changes.outputs.changes == 'true'

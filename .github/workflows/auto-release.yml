@@ -135,16 +135,30 @@ jobs:
         cat changelog.md >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
     
+    - name: Update version in flake.nix
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        NEW_VERSION="${{ steps.version.outputs.new_version }}"
+        # Remove the 'v' prefix for the version in flake.nix
+        VERSION_WITHOUT_V=${NEW_VERSION#v}
+        sed -i "s/version = \".*\";/version = \"$VERSION_WITHOUT_V\";/" flake.nix
+        
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add flake.nix
+        git commit -m "chore: Update version to $VERSION_WITHOUT_V in flake.nix" || echo "No version change needed"
+    
     - name: Create and push tag
       if: steps.check_changes.outputs.changed == 'true'
       run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
         git tag -a ${{ steps.version.outputs.new_version }} -m "Release ${{ steps.version.outputs.new_version }}"
-        git push origin ${{ steps.version.outputs.new_version }}
+        git push origin HEAD:main ${{ steps.version.outputs.new_version }}
     
     - name: Trigger release workflow
       if: steps.check_changes.outputs.changed == 'true'
       run: |
         echo "Tag pushed: ${{ steps.version.outputs.new_version }}"
-        echo "The release workflow will be triggered automatically by the new tag."
+        echo "Triggering release workflow..."
+        gh workflow run release.yml -f tag=${{ steps.version.outputs.new_version }}
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

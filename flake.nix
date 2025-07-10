@@ -15,7 +15,7 @@
         packages = {
           default = pkgs.buildGoModule {
             pname = "siplink";
-            version = "1.0.2";
+            version = "1.0.3";
             
             src = ./.;
             

@@ -148,6 +148,14 @@ jobs:
         git add flake.nix
         git commit -m "chore: Update version to $VERSION_WITHOUT_V in flake.nix" || echo "No version change needed"
     
+    - name: Validate Nix build
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        echo "Validating Nix build before release..."
+        nix flake check
+        nix build --no-link
+        echo "✅ Nix build validation successful"
+    
     - name: Create and push tag
       if: steps.check_changes.outputs.changed == 'true'
       run: |

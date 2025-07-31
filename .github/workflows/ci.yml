@@ -26,11 +26,10 @@ jobs:
         ref: ${{ github.head_ref || github.ref }}
     
     - name: Install Nix
-      uses: cachix/install-nix-action@v30
-      with:
-        nix_path: nixpkgs=channel:nixos-unstable
-        extra_nix_config: |
-          experimental-features = nix-command flakes
+      uses: DeterminateSystems/nix-installer-action@main
+    
+    - name: Setup Magic Nix Cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
     
     - name: Update vendor hash if needed
       id: update-hash
@@ -172,11 +171,10 @@ jobs:
       run: git pull
     
     - name: Install Nix
-      uses: cachix/install-nix-action@v30
-      with:
-        nix_path: nixpkgs=channel:nixos-unstable
-        extra_nix_config: |
-          experimental-features = nix-command flakes
+      uses: DeterminateSystems/nix-installer-action@main
+    
+    - name: Setup Magic Nix Cache
+      uses: DeterminateSystems/magic-nix-cache-action@main
     
     - name: Check Nix flake
       run: nix flake check

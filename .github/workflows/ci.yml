@@ -138,6 +138,8 @@ jobs:
       run: go vet ./...
     
     - name: Run staticcheck
+      # Only run staticcheck on Go 1.23+ due to tool requirements
+      if: matrix.go >= '1.23'
       uses: dominikh/staticcheck-action@v1
       with:
         version: "latest"

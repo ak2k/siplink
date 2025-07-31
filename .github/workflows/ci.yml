@@ -103,7 +103,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: ['1.21', '1.24']  # Min and latest versions only
+        go: ['1.24']  # Latest version only
     
     steps:
     - name: Checkout code

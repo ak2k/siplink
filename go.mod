@@ -1,6 +1,6 @@
 module github.com/ak2k/siplink
 
-go 1.21
+go 1.24
 
 require (
 	github.com/emiago/sipgo v0.33.0

@@ -19,7 +19,7 @@
             
             src = ./.;
             
-            vendorHash = "sha256-wD4jAHb7+wghMp/mokbkvaXNHLIAbZo8Z6qaAxNp28s";
+            vendorHash = "sha256-bSzMW7RQQNJrah+quG/sKuwROwQ/WCY6rF5Oh/MqN/0";
             
             # Use proxyVendor due to embedded test files in sipgo dependency
             proxyVendor = true;

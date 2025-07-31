@@ -39,15 +39,5 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    # Trigger auto-release after successful auto-merge
-    - name: Trigger auto-release
-      if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
-      run: |
-        # Wait a bit for the merge to complete
-        sleep 10
-        # Trigger the auto-release workflow
-        gh workflow run "Auto-release on dependency updates" \
-          --repo ${{ github.repository }} \
-          --ref main
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # Note: We can't trigger workflows from PR context due to GitHub security restrictions
+    # The auto-release will need to be triggered by the push event when the PR is merged

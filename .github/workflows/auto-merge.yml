@@ -38,3 +38,16 @@ jobs:
         gh pr comment "${{ github.event.pull_request.number }}" --body "This is a major version update and requires manual review before merging."
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Trigger auto-release after successful auto-merge
+    - name: Trigger auto-release
+      if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      run: |
+        # Wait a bit for the merge to complete
+        sleep 10
+        # Trigger the auto-release workflow
+        gh workflow run "Auto-release on dependency updates" \
+          --repo ${{ github.repository }} \
+          --ref main
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,9 +7,6 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'flake.lock'
-  pull_request:
-    types: [closed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       release_type:
@@ -28,11 +25,6 @@ permissions:
 jobs:
   check-and-release:
     runs-on: ubuntu-latest
-    # Only run if it's a direct push, manual trigger, or a merged PR
-    if: |
-      github.event_name == 'push' || 
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     
     steps:
     - name: Checkout code
@@ -53,20 +45,8 @@ jobs:
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           echo "changed=true" >> $GITHUB_OUTPUT
           echo "Manual release triggered"
-        elif [ "${{ github.event_name }}" = "pull_request" ]; then
-          # For PRs, check if the PR changed dependency files
-          echo "Checking PR for dependency changes..."
-          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path' | grep -E "(go.mod|go.sum|flake.lock)" || true)
-          if [ -n "$CHANGED_FILES" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "PR changed dependencies:"
-            echo "$CHANGED_FILES"
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "PR did not change dependencies"
-          fi
         else
-          # For push events, check if dependency files changed since last release
+          # Check if dependency files changed since last release
           CHANGED_FILES=$(git diff --name-only ${{ steps.last_release.outputs.last_tag }} HEAD -- go.mod go.sum flake.lock)
           if [ -n "$CHANGED_FILES" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -77,8 +57,6 @@ jobs:
             echo "No dependency changes since last release"
           fi
         fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Determine version bump
       id: version

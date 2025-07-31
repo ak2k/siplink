@@ -156,6 +156,52 @@ jobs:
         git add flake.nix
         git commit -m "chore: Update version to $VERSION_WITHOUT_V in flake.nix" || echo "No version change needed"
     
+    - name: Update vendor hash if needed
+      if: steps.check_changes.outputs.changed == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        echo "Checking vendor hash..."
+        
+        # First check if current hash is valid
+        if nix build .#default.goModules --no-link 2>&1 | tee build.log; then
+          echo "✅ Vendor hash is already valid"
+        else
+          # Check if it's a hash mismatch
+          if grep -qE "(hash mismatch|invalid SRI hash)" build.log; then
+            echo "❌ Vendor hash needs updating"
+            
+            # Set to empty to get correct hash
+            sed -i 's|vendorHash = ".*"|vendorHash = ""|' flake.nix
+            
+            # Get the correct hash
+            if ! nix build 2>&1 | tee build.log; then
+              CORRECT_HASH=$(grep -oE 'got:[[:space:]]+sha256-[a-zA-Z0-9+/]+' build.log | sed 's/got:[[:space:]]*//' | sed 's/^[[:space:]]*//')
+              
+              if [ -z "$CORRECT_HASH" ]; then
+                echo "Failed to extract vendor hash from build output"
+                echo "Build log tail:"
+                tail -20 build.log
+                exit 1
+              fi
+              
+              echo "Found correct hash: $CORRECT_HASH"
+              
+              # Update flake.nix with the correct hash
+              sed -i "s|vendorHash = \"\"|vendorHash = \"$CORRECT_HASH\"|" flake.nix
+              
+              # Commit the hash update
+              git add flake.nix
+              git commit -m "fix: Update vendorHash for release" || echo "No hash change needed"
+            fi
+          else
+            echo "Build failed for reasons other than hash mismatch"
+            tail -20 build.log
+            exit 1
+          fi
+        fi
+    
     - name: Validate Nix build
       if: steps.check_changes.outputs.changed == 'true'
       run: |

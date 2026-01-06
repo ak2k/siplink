@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.6
 
 require (
-	github.com/emiago/sipgo v1.0.1
+	github.com/emiago/sipgo v1.0.2
 	github.com/icholy/digest v1.1.0
 )
 

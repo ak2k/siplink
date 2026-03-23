@@ -1,0 +1,69 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 6am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    name: Update All Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Setup Cachix
+      uses: cachix/cachix-action@v15
+      with:
+        name: siplink
+        authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+    - name: Update Go modules
+      run: |
+        go get -u ./...
+        go mod tidy
+
+    - name: Update Nix flake
+      run: nix flake update
+
+    - name: Fix vendorHash
+      run: nix shell nixpkgs#nix-update -c nix-update --flake --version=skip default
+
+    - name: Verify build
+      run: nix build
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore(deps): update all dependencies"
+        title: "chore(deps): update all dependencies (Go + Nix)"
+        body: |
+          ## Automated Dependency Update
+
+          - Updated Go module dependencies
+          - Updated Nix flake inputs
+          - Updated vendorHash for Nix build
+          - Verified `nix build` passes
+        branch: automated-dependency-updates
+        delete-branch: true
+        labels: |
+          dependencies
+          automated

@@ -136,7 +136,7 @@ jobs:
     - name: Setup Cachix
       uses: cachix/cachix-action@v15
       with:
-        name: siplink
+        name: ak2k
         authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
     - name: Build with Nix

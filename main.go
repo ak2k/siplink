@@ -2,8 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"strings"
@@ -38,8 +45,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	phone1 := os.Args[1]
-	phone2 := os.Args[2]
+	phone1 := normalizePhone(os.Args[1])
+	phone2 := normalizePhone(os.Args[2])
 
 	username := os.Getenv("VOIPMS_USER")
 	password := os.Getenv("VOIPMS_PASS")
@@ -58,8 +65,21 @@ func main() {
 
 	ctx := context.Background()
 
-	// Initialize SIPGO
-	ua, err := sipgo.NewUA(sipgo.WithUserAgent("CallTransfer"))
+	// Initialize SIPGO with TLS
+	// VoIP.ms requires non-PFS cipher suites for TLS 1.2
+	tlsConfig := &tls.Config{
+		ServerName: server,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		},
+	}
+	ua, err := sipgo.NewUA(
+		sipgo.WithUserAgent("CallTransfer"),
+		sipgo.WithUserAgenTLSConfig(tlsConfig),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create UA: %v", err)
 	}
@@ -77,43 +97,16 @@ func main() {
 
 	// Handle NOTIFY requests for transfer status
 	srv.OnRequest(sip.NOTIFY, func(req *sip.Request, tx sip.ServerTransaction) {
-		event := req.GetHeader("Event")
-		log.Printf("📨 Received NOTIFY: %s", event)
-		
-		// Check the body for transfer status
 		body := string(req.Body())
-		log.Printf("📨 NOTIFY body: %s", body)
-		
-		// Decode the transfer status
+		log.Printf("📨 NOTIFY: %s", strings.TrimSpace(body))
+
 		if strings.Contains(body, "SIP/2.0 200") {
-			if strings.Contains(body, "OK") {
-				log.Println("✅ Transfer ACCEPTED by server")
-			}
-		} else if strings.Contains(body, "SIP/2.0 180") {
-			log.Println("📞 Target number is RINGING")
-		} else if strings.Contains(body, "SIP/2.0 183") {
-			log.Println("📡 Call is making PROGRESS")
-		} else if strings.Contains(body, "SIP/2.0 486") {
-			log.Println("❌ Target is BUSY")
-		} else if strings.Contains(body, "SIP/2.0 404") {
-			log.Println("❌ Target number NOT FOUND")
-		} else if strings.Contains(body, "SIP/2.0 487") {
-			log.Println("❌ Transfer CANCELLED")
-		} else if strings.Contains(body, "SIP/2.0 603") {
-			log.Println("❌ Transfer DECLINED")
-		}
-		
-		// Look for successful transfer (target answered)
-		if (strings.Contains(body, "SIP/2.0 200") && strings.Contains(body, "OK")) ||
-		   strings.Contains(body, "SIP/2.0 180") {
-			// Transfer is progressing or completed
 			select {
 			case transferComplete <- true:
 			default:
 			}
 		}
-		
-		// Send 200 OK response
+
 		res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 		if err := tx.Respond(res); err != nil {
 			log.Printf("Failed to respond to NOTIFY: %v", err)
@@ -144,9 +137,19 @@ func main() {
 		log.Fatalf("Failed to register: %v", err)
 	}
 
+	// Start TLS listener for incoming requests (NOTIFY, BYE)
+	listenerTLS := &tls.Config{
+		Certificates: []tls.Certificate{selfSignedCert()},
+	}
+	go func() {
+		if err := srv.ListenAndServeTLS(ctx, "tls", localIP+":5061", listenerTLS); err != nil {
+			log.Printf("TLS listener error: %v", err)
+		}
+	}()
+
 	// Create Dialog UA for calls
 	contactHdr := sip.ContactHeader{
-		Address: sip.Uri{User: username, Host: localIP, Port: 5060},
+		Address: sip.Uri{User: username, Host: localIP, Port: 5061},
 	}
 	dialogUA := sipgo.DialogUA{
 		Client:     client,
@@ -154,7 +157,7 @@ func main() {
 	}
 
 	// Make call
-	dialog, err := makeCall(ctx, &dialogUA, phone1, server, username, password)
+	dialog, err := makeCall(ctx, &dialogUA, phone1, server, localIP, username, password)
 	if err != nil {
 		log.Fatalf("Failed to make call: %v", err)
 	}
@@ -171,13 +174,46 @@ func main() {
 	select {
 	case <-transferComplete:
 		log.Println("✅ Transfer successful - calls are now connected!")
-		log.Println("🎉 Application can exit - call continues on server")
 	case <-time.After(30 * time.Second):
 		log.Println("⏰ Transfer timeout - sending BYE to cleanup")
 		dialog.Bye(ctx)
+		os.Exit(1)
 	}
+}
 
-	log.Println("\n✓ Call transfer completed successfully!")
+func normalizePhone(number string) string {
+	// Strip common formatting
+	cleaned := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, number)
+	// Prepend country code for 10-digit US/Canada numbers
+	if len(cleaned) == 10 {
+		cleaned = "1" + cleaned
+	}
+	return cleaned
+}
+
+func selfSignedCert() tls.Certificate {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		log.Fatalf("Failed to generate key: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		log.Fatalf("Failed to create certificate: %v", err)
+	}
+	return tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  key,
+	}
 }
 
 func getLocalIP() string {
@@ -199,12 +235,12 @@ func registerToServer(ctx context.Context, client *sipgo.Client, username, passw
 	log.Printf("Registering to %s...", server)
 
 	recipient := sip.Uri{}
-	sip.ParseUri(fmt.Sprintf("sip:%s@%s", username, server), &recipient)
+	sip.ParseUri(fmt.Sprintf("sips:%s@%s:5061", username, server), &recipient)
 	req := sip.NewRequest(sip.REGISTER, recipient)
 	req.AppendHeader(
-		sip.NewHeader("Contact", fmt.Sprintf("<sip:%s@%s>", username, localIP)),
+		sip.NewHeader("Contact", fmt.Sprintf("<sips:%s@%s:5061>", username, localIP)),
 	)
-	req.SetTransport("UDP")
+	req.SetTransport("TLS")
 
 	tx, err := client.TransactionRequest(ctx, req)
 	if err != nil {
@@ -269,23 +305,31 @@ func authenticateAndRegister(ctx context.Context, client *sipgo.Client, original
 	return nil
 }
 
-func makeCall(ctx context.Context, dialogUA *sipgo.DialogUA, phoneNumber, server, username, password string) (*sipgo.DialogClientSession, error) {
+func makeCall(ctx context.Context, dialogUA *sipgo.DialogUA, phoneNumber, server, localIP, username, password string) (*sipgo.DialogClientSession, error) {
 	log.Printf("📞 Calling %s...", phoneNumber)
 
-	recipient := sip.Uri{User: phoneNumber, Host: server}
+	recipient := sip.Uri{User: phoneNumber, Host: server, Port: 5061, UriParams: sip.HeaderParams{{K: "transport", V: "tls"}}}
 
-	// Create SDP with G.722 HD voice preference
+	// Generate random SRTP key (30 bytes, base64-encoded = 40 chars)
+	srtpKey := make([]byte, 30)
+	if _, err := rand.Read(srtpKey); err != nil {
+		return nil, fmt.Errorf("failed to generate SRTP key: %w", err)
+	}
+
+	// Create SDP with G.722 HD voice over SRTP
 	sdp := fmt.Sprintf(`v=0
 o=%s 123456 654321 IN IP4 %s
 s=Call Transfer
 c=IN IP4 %s
 t=0 0
-m=audio 10000 RTP/AVP 9 0 8
+m=audio 10000 RTP/SAVP 9 101
 a=rtpmap:9 G722/8000
-a=rtpmap:0 PCMU/8000
-a=rtpmap:8 PCMA/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-16
+a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:%s
 a=sendrecv
-`, username, getLocalIP(), getLocalIP())
+a=ptime:20
+`, username, localIP, localIP, base64.StdEncoding.EncodeToString(srtpKey))
 
 	contentTypeHeader := sip.NewHeader("Content-Type", "application/sdp")
 
@@ -347,10 +391,14 @@ func transferCall(ctx context.Context, dialog *sipgo.DialogClientSession, target
 }
 
 func getResponse(tx sip.ClientTransaction) (*sip.Response, error) {
-	select {
-	case <-tx.Done():
-		return nil, fmt.Errorf("transaction died")
-	case res := <-tx.Responses():
-		return res, nil
+	for {
+		select {
+		case <-tx.Done():
+			return nil, fmt.Errorf("transaction completed without final response")
+		case res := <-tx.Responses():
+			if res.StatusCode >= 200 {
+				return res, nil
+			}
+		}
 	}
 }

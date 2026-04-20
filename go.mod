@@ -3,7 +3,7 @@ module github.com/ak2k/siplink
 go 1.25.0
 
 require (
-	github.com/emiago/sipgo v1.2.1
+	github.com/emiago/sipgo v1.3.0
 	github.com/icholy/digest v1.1.0
 )
 
@@ -13,5 +13,5 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 )

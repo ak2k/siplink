@@ -117,3 +117,23 @@ jobs:
       run: gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body "Major version update — requires manual review."
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Auto-tag security update
+      if: (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor') && steps.metadata.outputs.alert-state != ''
+      env:
+        GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+      run: |
+        # Let the squash-merge settle on main
+        sleep 5
+        sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')
+        last=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref' \
+          | sed 's|^refs/tags/||' \
+          | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+          | sort -V | tail -1)
+        last="${last:-v0.0.0}"
+        IFS=. read -r major minor patch <<< "${last#v}"
+        next="v${major}.${minor}.$((patch+1))"
+        echo "Tagging $sha as $next (prior: $last, alert: ${{ steps.metadata.outputs.alert-state }})"
+        gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+          -f ref="refs/tags/$next" \
+          -f sha="$sha"

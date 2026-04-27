@@ -3,7 +3,7 @@ module github.com/ak2k/siplink
 go 1.25.0
 
 require (
-	github.com/emiago/sipgo v1.3.0
+	github.com/emiago/sipgo v1.3.1
 	github.com/icholy/digest v1.1.0
 )
 

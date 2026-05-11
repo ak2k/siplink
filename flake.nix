@@ -20,7 +20,7 @@
             src = ./.;
             goSum = ./go.sum;
 
-            vendorHash = "sha256-P+AkPKWZE6MTcJtzovN1UGlmT+vlZCBn4FezFbMU56Q=";
+            vendorHash = "sha256-FelSJCt8db8FWPA1TVP+JEjNZ58sQEvfMJ2V+m6Fjdg=";
             
             # Use proxyVendor due to embedded test files in sipgo dependency
             proxyVendor = true;

@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/emiago/sipgo v1.4.3
-	github.com/icholy/digest v1.1.0
+	github.com/icholy/digest v1.2.0
 )
 
 require (
